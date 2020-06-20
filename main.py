@@ -5,14 +5,14 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'vnkdjnfjknfl1232#'
 socketio = SocketIO(app)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def sessions():
     return render_template('session.html')
 
 def messageReceived(methods=['GET', 'POST']):
     print('message was received!!!')
 
-@socketio.on('my event')
+@socketio.on('my event', methods=['GET', 'POST'])
 def handle_my_custom_event(json, methods=['GET', 'POST']):
     print('received my event: ' + str(json))
     socketio.emit('my response', json, callback=messageReceived)
