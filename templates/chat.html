@@ -34,7 +34,14 @@
                     room: "{{ room }}",
                     message: message
                 })
-            }
+            };
+            if (message.length) {
+                socket.emit('send_message', {
+                    username: "{{ username }}",
+                    room: "main",
+                    message: message
+                });
+            };
             message_input.value = '';
             message_input.focus();
         }
