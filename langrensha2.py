@@ -12,17 +12,20 @@ class LRSMessage:
     '''
     target, sender, receiver are all playernums. 0 means system. The target can represent some other meaning like nvwu.
     '''
-    def __init__(self, sender=0, receiver=0, target=0, texttype='default'):
+    def __init__(self, sender=0, receiver=0,
+                 target=0, texttype='default', auth=None):
         self.sender = sender
         self.receiver = receiver
         self.target = target
         self.texttype = texttype
+        self.auth = auth
 
     def todict(self):
         return {'sender': self.sender,
                 'receiver': self.receiver,
                 'target': self.target,
-                'texttype': self.texttype}
+                'texttype': self.texttype,
+                'auth': self.auth}
 
 
 class User:
@@ -40,23 +43,27 @@ class User:
     def setnumber(self, num):
         self.playernum = num
 
-    def sendmessage(self, target, messagetype, cevent, receiver=0):
-        cevent.update(LRSMessage(sender=self.playernum,
-                                 receiver=receiver, target=target,
-                                 texttype=messagetype))
+    def sendmessage(self, target, texttype='default', auth=None):
+        return LRSMessage(sender=self.playernum, receiver=0,
+                          target=target, texttype=texttype, auth=auth)
 
-    def notify(self, text):
-        pass
+    def notifymessage(self, target, texttype='default', auth=None):
+        return LRSMessage(sender=0, receiver=self.playernum,
+                          target=target, texttype=texttype, auth=auth)
 
 
 class Event:
-    def __init__(self, relatedusers, targets=[], texttype=''):
+    def __init__(self, relatedusers, targets=list(), info=None):
         self.__relatedusers = relatedusers[:]
-        self.__pool = {'A': []}
+        self.__pool = {'A': list()}
         self.__targets = targets
         self.status = 'Active'
-        self.type = texttype
+        self.__info = info
         self.result = ['A']
+        self.__log = list()
+
+    def start(self):
+        pass
 
     def update(self, message):
         sender = message.sender
@@ -77,18 +84,21 @@ class Event:
         self.status = 'End'
         pool = [len(p) for p in list(self.__pool.values())]
         max = maxoflist(pool)
-        self.result = []
+        self.result = list()
         for index in max:
             self.result.append(list(self.__pool.keys())[index])
         if 'A' in self.result:
             self.result.remove('A')
 
-    def getlog(self):
+    def getpool(self):
         return self.__pool
+
+    def getlog(self):
+        return self.__log
 
 
 class EventEvenRandom(Event):
-    def __init__(self, relatedusers, targets=[], texttype=''):
+    def __init__(self, relatedusers, targets=list(), texttype='default'):
         super().__init__(relatedusers, targets, texttype)
 
     def end(self):
@@ -98,14 +108,33 @@ class EventEvenRandom(Event):
 
 
 class EventNvwu(Event):
-    def __init__(self, relatedusers, targets=[], texttype=''):
-        super().__init__(relatedusers, targets, texttype)
+    '''
+    __info = {'nvwu': user, 'daokou': playernum}
+    '''
+    # def __init__(self, relatedusers, external, targets=list(), texttype='default'):
+    #     super().__init__(relatedusers=relatedusers, external=external,
+    #                      targets=targets, texttype=texttype)
+
+    def start(self):
+        if 'nvwu' in self.__info.keys():
+            self.__info['nvwu'].notifymessage(self.__info['daokou'],
+                                              texttype='nvwuyandaokou')          
 
     def end(self):
         super().end()
         if len(self.result) > 0:
             self.result = random.choices(self.result)
 
+
+class EventYuyanjia(Event):
+    '''
+    __info = {'yuyanjia': user}
+    '''
+    def end(self):
+        super().end()
+        if len(self.result) > 0:
+            print(users[self.result[0]].role)
+            
 
 #%%
 class Roles:
@@ -115,10 +144,10 @@ class Roles:
         self.timing = timing
         self.assigneduser = None
 
-    def night(self):
+    def night(self, **kwargs):
         pass
 
-    def passive(self):
+    def passive(self, **kwargs):
         pass
 
     def day(self, **kwargs):
@@ -129,9 +158,15 @@ class Roles_Nvwu(Roles):
     def __init__(self, user):
         super().__init__('nvwu', 'shen', 30)
         self.assigneduser = user
+        self.jie = 1
+        self.du = 1
 
-    def night(self):
-        print('hohohohoho')
+    # def night(self, *args):
+    #     if args is 'yongjie':
+    #         self.jie = 0
+    #     if args is 'yongdu':
+    #         self.du = 0
+    #     return {'jie': self.jie, 'du': self.du}
 
 
 class Roles_Yuyanjia(Roles):
@@ -139,8 +174,8 @@ class Roles_Yuyanjia(Roles):
         super().__init__('yuyanjia', 'shen', 40)
         self.assigneduser = user
 
-    def night(self):
-        print('haha')
+    # def night(self):
+    #     print('haha')
 
 
 class Roles_Lieren(Roles):
@@ -190,11 +225,13 @@ class Modes:
 
 #%%
 class GameStatus:
-    def __init__(self, user=[], modes=Modes.Mode_Default):
+    def __init__(self, user=list(), modes=Modes.Mode_Default):
         self.Modes = modes
         self.NUMBEROFPLAYERS = len(user)
         self.allusers = user
-        self.roles = []
+        self.roles = list()
+        self.log = list()
+        self.events = [Event]
         tempuser = self.allusers[:]
         random.shuffle(tempuser)
         for i, p in enumerate(tempuser):
@@ -219,6 +256,11 @@ class GameStatus:
         for r in list(self.roleindex.keys()):
             for u in self.roleindex[r]:
                 print(r + ': ' + u.name)
+
+    def printlog(self):
+        for item in self.log:
+            print(item)
+            print('\n')
 
 
 new = Event(relatedusers=[1, 2, 3], targets=[1, 2])
@@ -245,14 +287,24 @@ newgame.printroles()
 newgame.roles[0].night()
 user8.role
 
+newgame.printlog()
 #%%
-user1.sendmessage(1, 's', new)
-print(new.getlog())
+new.update(user1.sendmessage(1))
+print(new.getpool())
 #%%
-user1.sendmessage(1, 's', new)
-print(new.getlog())
-user3.sendmessage(2, 's', new)
-print(new.getlog())
-user2.sendmessage(3, 's', new)
-print(new.getlog())
+new.update(user1.sendmessage(2))
+print(new.getpool())
+new.update(user2.sendmessage(1))
+print(new.getpool())
+new.update(user3.sendmessage(3))
+print(new.getpool())
 print(new.result)
+
+
+#%%
+# y = EventYuyanjia(relatedusers=[1], targets=[0,1,2,3,4,5,6,7,8])
+for i in range(9):
+    y = EventYuyanjia(relatedusers=[1], targets=[0,1,2,3,4,5,6,7,8]).update(user1.sendmessage(i))
+newgame.printroles()
+
+# %%
