@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Chat App</title>
+</head>
+<body>
+<h1>Create Room</h1>
+<h3>{{ message }}</h3>
+<form method="post">
+    <label>Room Name:</label>
+    <input type="text" name="room_name" required>
+    <br>
+    <label>Members:</label>
+    <input type="text" name="members" required>
+    <br>
+    <p>选择游戏板型: </p>
+    <input type="checkbox" id="role1" name="role" value="预言家">
+    <label for="role1">预言家</label><br>
+    <input type="checkbox" id="role2" name="role" value="女巫">
+    <label for="role2">女巫</label><br>
+    <input type="checkbox" id="role3" name="role" value="猎人">
+    <label for="role3">猎人</label><br>    
+    <input type="checkbox" id="role4" name="role" value="白痴">
+    <label for="role4">白痴</label><br>  
+    
+    
+    <label>普通村民:</label>
+    <input type="number" name="cunmin" min="0" max="10" required>
+    <br>
+    <label>普通狼人:</label>
+    <input type="number" name="langren" min="0" max="10" required>
+    <br>    
+    <p>女巫第一晚是否可以自救: </p>    
+    <input type="radio" id="yes1" name="nvwu1save" value="可以" required>
+    <label for="yes1">是</label>
+    <input type="radio" id="no1" name="nvwu1save" value="不可以">
+    <label for="no1">否</label><br>
+    <p>是否有上警环节: </p>    
+    <input type="radio" id="yes2" name="shangjing" value="有" required>
+    <label for="yes2">是</label>
+    <input type="radio" id="no2" name="shangjing" value="没有">
+    <label for="no2">否</label><br>    
+    
+    <button type="submit">Submit</button>
+</form>
+
+
+</body>
+</html>
