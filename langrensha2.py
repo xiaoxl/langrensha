@@ -150,7 +150,7 @@ class EventNvwu(Event):
     def start(self):
         if 'nvwu' in self._info.keys():
             self._info['nvwu'].notifymessage(self._info['daokou'],
-                                             texttype='nvwuyandaokou')          
+                                             texttype='nvwuyandaokou')
 
     def end(self):
         super().end()
@@ -168,6 +168,7 @@ class EventYuyanjia(Event):
         if len(self.result) > 0:
             self._log.append(LogMessage(sender=[ynum], receiver=[0],
                                         info={'type': 'yuyanjiayanren',
+                                              'target': self.result[0],
                                               'result': users[self.result[0]-1].role},
                                         auth=[ynum]))
             
@@ -248,8 +249,8 @@ class Roles_Cunmin(Roles):
 
 
 class Modes:
-    MODE_YNL9 = [Roles_Yuyanjia, Roles_Nvwu, Roles_Lieren, 
-                 Roles_Cunmin, Roles_Cunmin, Roles_Cunmin, 
+    MODE_YNL9 = [Roles_Yuyanjia, Roles_Nvwu, Roles_Lieren,
+                 Roles_Cunmin, Roles_Cunmin, Roles_Cunmin,
                  Roles_Lang, Roles_Lang, Roles_Lang]
 
     MODE_YNLB = [Roles_Yuyanjia, Roles_Nvwu, Roles_Lieren, Roles_Baichi,
@@ -388,12 +389,3 @@ newgame.printroles()
 # # newgame.printlog()
 
 # %%
-class A:
-    def __init__(self, s=[]):
-        self.s = s
-        self.s.append(1)
-
-l = []
-v = A()
-v.s
-l
