@@ -309,18 +309,18 @@ class EventYuyanjia(Event):
 
 #%%
 class GameStatus:
-    def __init__(self, user=None, modes=Modes.Mode_Default):
-        self.Modes = modes
-        self.NUMBEROFPLAYERS = user.num
-        self.allusers = user.copy()
+    def __init__(self, users=None, mode=Modes.Mode_Default):
+        self.Modes = mode
+        self.NUMBEROFPLAYERS = users.num
+        self.allusers = users.copy()
         self.roles = list()
         self.log = list()
         self.events = [Event]
         self.cevent = None
-        tempuser = list(range(1,user.num+1))
+        tempuser = list(range(1,users.num+1))
         random.shuffle(tempuser)
         for i in range(self.NUMBEROFPLAYERS):
-            self.roles.append(modes[i](self.allusers.pick(tempuser[i])))
+            self.roles.append(mode[i](self.allusers.pick(tempuser[i])))
         self.roleindex = dict()
         for i in self.roles:
             i.assigneduser.setrole(i.name)
@@ -391,7 +391,7 @@ class GameStatus:
 
 # users = Users([user1, user2, user3, user4, user5, user6, user7, user8, user9])
 
-users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9'])
+users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11', '12'])
 # u = users.copy()
 
 # print(users.userlist())
@@ -401,7 +401,7 @@ users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9'])
 # print(u.userlist())
 #%%
 
-newgame = GameStatus(users)
+newgame = GameStatus(users=users, mode=Modes.MODE_YNLB)
 newgame.printroles()
 
 yuyanjianum = newgame.roleindex['yuyanjia'][0].playernum
