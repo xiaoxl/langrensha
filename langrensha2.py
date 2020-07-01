@@ -50,6 +50,7 @@ class User:
         self.name = username
         self.role = 'unknown'
         self.playernum = playernum
+        self.status = 'alive'
 
     def setrole(self, role):
         self.role = role
@@ -167,6 +168,7 @@ class Roles_Baichi(Roles):
         super().__init__('baichi', 'shen', -10)
         self.assigneduser = user
         # self.assigneduser.setrole('baichi')
+
     def passive(self):
         print('haha')
 
@@ -310,14 +312,14 @@ class EventYuyanjia(Event):
 #%%
 class GameStatus:
     def __init__(self, users=None, mode=Modes.Mode_Default):
-        self.Modes = mode
+        self.Mode = mode
         self.NUMBEROFPLAYERS = users.num
         self.allusers = users.copy()
         self.roles = list()
         self.log = list()
         self.events = [Event]
         self.cevent = None
-        tempuser = list(range(1,users.num+1))
+        tempuser = list(range(1, self.NUMBEROFPLAYERS+1))
         random.shuffle(tempuser)
         for i in range(self.NUMBEROFPLAYERS):
             self.roles.append(mode[i](self.allusers.pick(tempuser[i])))
@@ -348,10 +350,22 @@ class GameStatus:
         print(self.cevent.getpool())
 
     def changeroles(self):
-        tempuser = self.allusers[:]
+        self.roles = list()
+        self.roleindex = dict()
+        self.userindex = dict()
+        tempuser = list(range(1, self.NUMBEROFPLAYERS+1))
         random.shuffle(tempuser)
-        for i, p in enumerate(tempuser):
-            self.roles.append(self.Modes[i](p))
+        for i in range(self.NUMBEROFPLAYERS):
+            self.roles.append(self.Mode[i](self.allusers.pick(tempuser[i])))
+        for i in self.roles:
+            i.assigneduser.setrole(i.name)
+            if i.name in self.roleindex.keys():
+                temlist = self.roleindex[i.name]
+                temlist.append(i.assigneduser)
+                self.roleindex.update({i.name: temlist})
+            else:
+                self.roleindex.update({i.name: [i.assigneduser]})
+        self.userindex = {item.assigneduser: item.name for item in self.roles}
 
     def printroles(self):
         roles = list()
@@ -360,6 +374,20 @@ class GameStatus:
                 roles.append(r + ': ' + u.name)
                 # print(r + ': ' + u.name)
         return roles
+
+    def userrenum(self):
+        self.allusers.renum()
+
+    def gameindex(self):
+        gindex = list()
+        ulist = self.allusers
+        rlist = self.userindex
+        for i in range(1, self.NUMBEROFPLAYERS+1):
+            gindex.append({'playernum': i,
+                           'username': ulist.pick(i).name,
+                           'role': rlist[ulist.pick(i)],
+                           'status': ulist.pick(i).status})
+        return gindex
 
     def loguserview(self, cuser=0):
         clog = list()
@@ -402,7 +430,9 @@ users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11',
 #%%
 
 newgame = GameStatus(users=users, mode=Modes.MODE_YNLB)
-newgame.printroles()
+print(newgame.printroles())
+
+print(newgame.gameindex())
 
 yuyanjianum = newgame.roleindex['yuyanjia'][0].playernum
 nvwunum = newgame.roleindex['nvwu'][0].playernum
