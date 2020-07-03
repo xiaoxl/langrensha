@@ -246,7 +246,7 @@ class Modes:
             rlist = self.LC_generate(numberofplayers)
         return rlist
 
- #%%
+
 class GameStatus:
     def __init__(self, users=None, mode='Default'):
         self.NumberOfPlayers = users.num
