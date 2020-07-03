@@ -100,7 +100,7 @@ class Users:
         return rlist
 
     def renum(self):
-        tempnum = range(1, self.num+1)
+        tempnum = list(range(1, self.num+1))
         random.shuffle(tempnum)
         for item, cuser in enumerate(self.users):
             cuser.setnumber(tempnum[item])
@@ -249,12 +249,14 @@ class Modes:
 
 class GameStatus:
     def __init__(self, users=None, mode='Default'):
-        self.NumberOfPlayers = users.num
-        self.Mode = Modes().get(users.num, mode=mode)
-        self.AllUsers = users.copy()
+        if isinstance(users, Users):
+            self.NumberOfPlayers = users.num
+            self.AllUsers = users.copy()
+        if isinstance(users, list):
+            self.NumberOfPlayers = len(users)
+            self.AllUsers = Users(users)
+        self.Mode = Modes().get(self.NumberOfPlayers, mode=mode)
         self.Roles = list()
-        self.RoleIndex = dict()
-        self.UserIndex = dict()
 
     def initialize(self, changenum=False):
         self.changeroles()
@@ -270,33 +272,12 @@ class GameStatus:
         for i in range(self.NumberOfPlayers):
             self.Roles.append(self.Mode[i](self.AllUsers.pick(tempuser[i])))
             self.Roles[-1].assigneduser.setrole(self.Roles[-1].name)
-        self.UserIndex = {item.assigneduser: item.name for item in self.Roles}
-        self.RoleIndex = self.AllUsers.roleindex()
-
-    def generateroleindex(self):
-        pass
 
     def changenums(self):
         self.AllUsers.renum()
 
-    def gameindex(self):
-        gindex = list()
-        ulist = self.AllUsers
-        rlist = self.UserIndex
-        for i in range(1, self.NumberOfPlayers+1):
-            gindex.append({'playernum': i,
-                           'username': ulist.pick(i).name,
-                           'role': rlist[ulist.pick(i)],
-                           'status': ulist.pick(i).status})
-        return gindex
-
-    def printroles(self):
-        roles = list()
-        for r in list(self.RoleIndex.keys()):
-            for u in self.RoleIndex[r]:
-                roles.append(r + ': ' + u.name)
-                # print(r + ': ' + u.name)
-        return roles
+    def gameindex(self, basedon='playernum'):
+        return self.AllUsers.print(basedon=basedon)
 
     def recoverfrom(self, gindex):
         '''
@@ -319,9 +300,11 @@ class GameStatus:
 #%%
 users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11', '12'])
 
-newgame = GameStatus(users=users, mode='MODE_YNLB')
-newgame.initialize()
-newgame.gameindex()
+
+u=['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11', '12']
+newgame = GameStatus(users=u, mode='MODE_YNLB')
+newgame.initialize(changenum=False)
+newgame.gameindex(basedon='role')
 
 #%%
 
