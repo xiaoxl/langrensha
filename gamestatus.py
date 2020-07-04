@@ -62,13 +62,13 @@ class User:
                 'role': self.role,
                 'roleinfo': self.roleClass.dumps()['info']}
 
-    def load(self, data):
+    def loads(self, data):
         self.name = data['name']
         self.playernum = data['playernum']
         self.status = data['status']
         self.role = data['role']
         self.roleClass = Modes.MODE_DICT[self.role]()
-        self.roleClass.load({'name': data['role'], 'info': data['roleinfo']})
+        self.roleClass.loads({'name': data['role'], 'info': data['roleinfo']})
 
 
 #%%
@@ -163,12 +163,12 @@ class Users:
     def dumps(self):
         return [item.dumps() for item in self.users]
 
-    def load(self, data):
+    def loads(self, data):
         self.num = len(data)
         self.users = list()
         for index in range(self.num):
             temp = User(' ')
-            temp.load(data[index])
+            temp.loads(data[index])
             self.users.append(temp)
 
 
@@ -191,9 +191,9 @@ class Roles:
 
     def dumps(self):
         return {'name': self.name,
-                'info': self.info}
+                'info': self.info.copy()}
 
-    def load(self, data):
+    def loads(self, data):
         temp = Modes.MODE_DICT[data['name']]()
         self.name = temp.name
         self.faction = temp.faction
@@ -327,7 +327,7 @@ class GameStatus:
         if isinstance(users, list):
             self.NumberOfPlayers = len(users)
             self.AllUsers = Users(users)
-        self.Mode = Modes().get(self.NumberOfPlayers, mode=mode)
+        self.Mode = sorted(Modes().get(self.NumberOfPlayers, mode=mode))
 
     def initialize(self, changenum=False):
         self.changeroles()
@@ -346,18 +346,19 @@ class GameStatus:
     def gameindex(self, basedon='playernum'):
         return self.AllUsers.print(basedon=basedon)
 
-    def load(self, info):
+    def loads(self, info):
         '''
-        info = {header = {mode, NumberOfPlayers}, status={dumps}}
+        info = {dumps}
         '''
-        header = info['header']
-        self.NumberOfPlayers = header['NumberOfPlayers']
-        self.Mode = Modes().get(self.NumberOfPlayers, 
-                                     mode=header['mode'])
-        self.AllUsers.load(info['status'])
-    
+        self.NumberOfPlayers = len(info)
+        self.Mode = sorted([item['role'] for item in info])
+        self.AllUsers.loads(info)
+
     def dumps(self):
-        pass
+        return self.AllUsers.dumps()
+
+    def pick(self, i):
+        return self.AllUsers.pick(i)
 
 
 #%%
