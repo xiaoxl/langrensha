@@ -3,6 +3,7 @@ import random
 import math
 
 
+#%%
 class LRSMessage:
     '''
     target, sender, receiver are all playernums. 0 means system. The target can represent some other meaning like nvwu.
@@ -23,15 +24,18 @@ class LRSMessage:
                 'auth': self.auth}
 
 
+#%%
 class User:
     def __init__(self, username, playernum=0):
         self.name = username
-        self.role = 'unknown'
         self.playernum = playernum
         self.status = 'alive'
+        self.role = 'unknown'
+        self.roleClass = Modes.MODE_DICT[self.role]()
 
     def setrole(self, role):
         self.role = role
+        self.roleClass = Modes.MODE_DICT[self.role]()
 
     def setnumber(self, num):
         self.playernum = num
@@ -51,19 +55,35 @@ class User:
         return LRSMessage(sender=0, receiver=self.playernum,
                           target=target, texttype=texttype, auth=auth)
 
+    def dumps(self):
+        return {'name': self.name,
+                'playernum': self.playernum,
+                'status': self.status,
+                'role': self.role,
+                'roleinfo': self.roleClass.dumps()['info']}
+
+    def load(self, data):
+        self.name = data['name']
+        self.playernum = data['playernum']
+        self.status = data['status']
+        self.role = data['role']
+        self.roleClass = Modes.MODE_DICT[self.role]()
+        self.roleClass.load({'name': data['role'], 'info': data['roleinfo']})
+
 
 #%%
 class Users:
-    def __init__(self, listofusernames):
+    def __init__(self, listofusernames=None):
         self.users = list()
-        for item in listofusernames:
-            if isinstance(item, str):
-                self.users.append(User(username=item))
-            if isinstance(item, User):
-                self.users.append(item)
-        self.num = len(self.users)
-        for item, cuser in enumerate(self.users):
-            cuser.setnumber(item + 1)
+        if listofusernames is not None:
+            for item in listofusernames:
+                if isinstance(item, str):
+                    self.users.append(User(username=item))
+                if isinstance(item, User):
+                    self.users.append(item)
+            self.num = len(self.users)
+            for item, cuser in enumerate(self.users):
+                cuser.setnumber(item + 1)
 
     def nameindex(self, index=None):
         nameindex = {item.name: item for item in self.users}
@@ -105,6 +125,11 @@ class Users:
         for item, cuser in enumerate(self.users):
             cuser.setnumber(tempnum[item])
 
+    def changeroles(self, listofrolenames):
+        if len(listofrolenames) == self.num:
+            for i in range(self.num):
+                self.pick(i+1).setrole(listofrolenames[i])
+
     def copy(self):
         newusers = Users(self.nameindex().values())
         return newusers
@@ -114,20 +139,37 @@ class Users:
         if basedon == 'name':
             ulist = self.nameindex()
             for k in sorted(ulist.keys()):
-                rlist.update({k: {'playernum': ulist[k].playernum, 'role': ulist[k].role, 'status': ulist[k].status}})
+                rlist.update({k: {'playernum': ulist[k].playernum,
+                                  'role': ulist[k].role,
+                                  'status': ulist[k].status}})
         elif basedon == 'role':
             ulist = self.roleindex()
             for k in sorted(ulist.keys()):
-                templist = [{'playernum': t.playernum, 'name': t.name, 'status': t.status} for t in ulist[k]]
+                templist = [{'playernum': t.playernum, 
+                             'name': t.name, 
+                             'status': t.status} for t in ulist[k]]
                 rlist.update({k: templist})
         else:
             ulist = self.numindex()
             for k in sorted(ulist.keys()):
-                rlist.update({k: {'name': ulist[k].name, 'role': ulist[k].role, 'status': ulist[k].status}})
+                rlist.update({k: {'name': ulist[k].name,
+                                  'role': ulist[k].role,
+                                  'status': ulist[k].status}})
         return rlist
 
     def pick(self, playernum):
         return self.numindex(playernum)
+
+    def dumps(self):
+        return [item.dumps() for item in self.users]
+
+    def load(self, data):
+        self.num = len(data)
+        self.users = list()
+        for index in range(self.num):
+            temp = User(' ')
+            temp.load(data[index])
+            self.users.append(temp)
 
 
 #%%
@@ -136,7 +178,7 @@ class Roles:
         self.name = name
         self.faction = faction
         self.timing = timing
-        self.assigneduser = None
+        self.info = dict()
 
     def night(self, **kwargs):
         pass
@@ -147,99 +189,129 @@ class Roles:
     def day(self, **kwargs):
         pass
 
+    def dumps(self):
+        return {'name': self.name,
+                'info': self.info}
+
+    def load(self, data):
+        temp = Modes.MODE_DICT[data['name']]()
+        self.name = temp.name
+        self.faction = temp.faction
+        self.timing = temp.timing
+        self.info = data['info']
+
+
+class Roles_Unknown(Roles):
+    def __init__(self):
+        super().__init__('unknown', 'unknown', 0)
+
 
 class Roles_Nvwu(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('nvwu', 'shen', 30)
-        self.assigneduser = user
-        # self.assigneduser.setrole('nvwu')
-        self.jie = 1
-        self.du = 1
+        self.info = {'jie': 1, 'du': 1}
 
-    # def night(self, *args):
-    #     if args is 'yongjie':
-    #         self.jie = 0
-    #     if args is 'yongdu':
-    #         self.du = 0
-    #     return {'jie': self.jie, 'du': self.du}
+    def applyjie(self):
+        flag = 'fail'
+        if self.info['jie'] == 1:
+            self.info['jie'] = 0
+            flag = 'succeed'
+        return flag
+
+    def applydu(self):
+        flag = 'fail'
+        if self.info['du'] == 1:
+            self.info['du'] = 0
+            flag = 'succeed'
+        return flag
 
 
 class Roles_Yuyanjia(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('yuyanjia', 'shen', 40)
-        self.assigneduser = user
-        # self.assigneduser.setrole('yuyanjia')
-    # def night(self):
-    #     print('haha')
 
 
 class Roles_Lieren(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('lieren', 'shen', -10)
-        self.assigneduser = user
-        # self.assigneduser.setrole('lieren')
 
     def passive(self):
         print('haha')
 
 
 class Roles_Baichi(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('baichi', 'shen', -10)
-        self.assigneduser = user
-        # self.assigneduser.setrole('baichi')
 
     def passive(self):
         print('haha')
 
 
 class Roles_Lang(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('lang', 'lang', 20)
-        self.assigneduser = user
-        # self.assigneduser.setrole('lang')
 
     def night(self):
         print('haha')
 
 
+class Roles_Heilangwang(Roles):
+    def __init__(self):
+        super().__init__('heilangwang', 'lang', -10)
+
+    def passive(self):
+        print('hoho')
+
+
+class Roles_Bailangwang(Roles):
+    def __init__(self):
+        super().__init__('bailangwang', 'lang', 100)
+        
+    def day(self):
+        print('xxxx')
+
+
 class Roles_Cunmin(Roles):
-    def __init__(self, user):
+    def __init__(self):
         super().__init__('cunmin', 'min', 0)
-        self.assigneduser = user
-        # self.assigneduser.setrole('cunmin')
 
 
 class Modes:
-    MODE_YNL9 = [Roles_Yuyanjia, Roles_Nvwu, Roles_Lieren,
-                 Roles_Cunmin, Roles_Cunmin, Roles_Cunmin,
-                 Roles_Lang, Roles_Lang, Roles_Lang]
+    MODE_YNL9 = ['yuyanjia', 'nvwu', 'lieren',
+                 'cunmin', 'cunmin', 'cunmin',
+                 'lang', 'lang', 'lang']
 
-    MODE_YNLB = [Roles_Yuyanjia, Roles_Nvwu, Roles_Lieren, Roles_Baichi,
-                 Roles_Cunmin, Roles_Cunmin, Roles_Cunmin, Roles_Cunmin,
-                 Roles_Lang, Roles_Lang, Roles_Lang, Roles_Lang]
+    MODE_YNLB = ['yuyanjia', 'nvwu', 'lieren', 'baichi',
+                 'cunmin', 'cunmin', 'cunmin', 'cunmin',
+                 'lang', 'lang', 'lang', 'lang']
 
     MODE_DICT = {'yuyanjia': Roles_Yuyanjia,
                  'nvwu': Roles_Nvwu,
                  'lieren': Roles_Lieren,
                  'baichi': Roles_Baichi,
                  'cunmin': Roles_Cunmin,
-                 'lang': Roles_Lieren}
-
-    # MODE_DEFAULT = MODE_YNL9
+                 'lang': Roles_Lang,
+                 'heilangwang': Roles_Heilangwang,
+                 'bailangwang': Roles_Bailangwang,
+                 'unknown': Roles_Unknown}
 
     def LC_generate(self, numofplayers):
         numoflang = math.floor(numofplayers/2)
         numofcunmin = numofplayers - numoflang
-        rlist = [Roles_Lang for i in range(numoflang)]
-        rlist.extend([Roles_Cunmin for j in range(numofcunmin)])
+        rlist = ['lang' for i in range(numoflang)]
+        rlist.extend(['cunmin' for j in range(numofcunmin)])
         return rlist
 
-    def get(self, numberofplayers, mode='Default'):
+    def get(self, numberofplayers, mode='default'):
+        '''
+        mode = a list of names
+        '''
         if mode == 'MODE_YNLB':
             rlist = self.MODE_YNLB
         elif mode == 'MODE_YNL9':
             rlist = self.MODE_YNL9
+        elif isinstance(mode, list):
+            rlist = mode
         else:
             rlist = self.LC_generate(numberofplayers)
         if numberofplayers != len(rlist):
@@ -256,22 +328,17 @@ class GameStatus:
             self.NumberOfPlayers = len(users)
             self.AllUsers = Users(users)
         self.Mode = Modes().get(self.NumberOfPlayers, mode=mode)
-        self.Roles = list()
 
     def initialize(self, changenum=False):
         self.changeroles()
         if changenum is True:
             self.changenums()
 
-    def changeroles(self):
-        self.Roles = list()
-        self.RoleIndex = dict()
-        self.UserIndex = dict()
-        tempuser = list(range(1, self.NumberOfPlayers+1))
-        random.shuffle(tempuser)
-        for i in range(self.NumberOfPlayers):
-            self.Roles.append(self.Mode[i](self.AllUsers.pick(tempuser[i])))
-            self.Roles[-1].assigneduser.setrole(self.Roles[-1].name)
+    def changeroles(self, shuffle=True):
+        roles = self.Mode[:]
+        if shuffle is True:
+            random.shuffle(roles)
+        self.AllUsers.changeroles(roles)
 
     def changenums(self):
         self.AllUsers.renum()
@@ -279,22 +346,18 @@ class GameStatus:
     def gameindex(self, basedon='playernum'):
         return self.AllUsers.print(basedon=basedon)
 
-    def recoverfrom(self, gindex):
+    def load(self, info):
         '''
-        gindex has to be the exact format as in gameindex()
+        info = {header = {mode, NumberOfPlayers}, status={dumps}}
         '''
-        pnums = [item['playernum'] for item in gindex]
-        unames = [item['username'] for item in gindex]
-        roles = [item['role'] for item in gindex]
-        ustatus = [item['playernum'] for item in gindex]
-        self.AllUsers = Users(unames)
-        for index, player in enumerate(self.AllUsers):
-            player.setnumber(pnums[index])
-            player.setstatus(ustatus[index])
-        
-
-
-
+        header = info['header']
+        self.NumberOfPlayers = header['NumberOfPlayers']
+        self.Mode = Modes().get(self.NumberOfPlayers, 
+                                     mode=header['mode'])
+        self.AllUsers.load(info['status'])
+    
+    def dumps(self):
+        pass
 
 
 #%%
@@ -303,8 +366,9 @@ users = Users(['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11',
 
 u=['a1', 'b2', 'c3', 'd4', 'e5', 'f6', 'g7', 'h8', 'i9', '10', '11', '12']
 newgame = GameStatus(users=u, mode='MODE_YNLB')
-newgame.initialize(changenum=False)
-newgame.gameindex(basedon='role')
+newgame.initialize(changenum=True)
+# newgame.
+newgame.gameindex()
 
 #%%
 
@@ -341,11 +405,28 @@ newgame.gameindex(basedon='role')
 
 # newgame.loguserview(cuser=1)
 
-#%%
-with open('data.txt', 'w') as outfile:
-    json.dump(newgame.gameindex(), outfile)
+# #%%
+# with open('data.txt', 'w') as outfile:
+#     json.dump(ul.dumps(), outfile)
 
 
-# %%
-with open('data.txt', 'r') as readfile:
-    dd = json.load(readfile)
+# # %%
+# with open('data.txt', 'r') as readfile:
+#     dd = json.load(readfile)
+# s = {'header': {'modes': [], 'NumberOfPlayers': 12}, 'status': dd}
+
+# #%%
+# newgame.recoverfrom(s)
+
+# #%%
+# mm = ['yuyanjia', 'nvwu', 'lang', 'lang', 'cunmin', 'cunmin']
+# t = Modes().generate(mm)
+# t[0]
+
+
+# #%%
+# users = Users(['a1', 'b2', 'c3', 'd4'])
+# uu = users.dumps()
+# users.pick(2).setrole('nvwu')
+# users.load(uu)
+# print(users.print())
