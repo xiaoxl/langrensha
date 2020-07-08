@@ -66,3 +66,8 @@ a.shuffleroles()
 s = a.getroles()
 
 print(s)
+
+#%%
+
+import random
+str(random.randint(1,5))+'+'+str(random.randint(1,5))
