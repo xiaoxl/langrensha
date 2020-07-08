@@ -503,11 +503,6 @@ class Event:
                 if captain is True:
                     if self._gamestatus.captain in self._pool[i]:
                         pool.update({i: pool[i]+0.5})
-        # pool = {i: len(self._pool[i]) for i in self._pool.keys() if i != 'A'}
-        # if captain is True:
-        #     for i in pool.keys():
-        #         if self._gamestatus.captain in self._pool[i]:
-        #             pool.update({i: pool[i]+0.5})
         maxvalue = max(pool.values())
         result = [i for i in pool.keys() if pool[i] == maxvalue]
         if tiebreak == 'random':
@@ -553,10 +548,6 @@ class EventLang(Event):
             self._gamestatus.pick(self.result[0]).setstatus('murdered')
             self._info.append({'type': 'langdao', 'target': self.result[0],
                                'round': self._gamestatus.round})
-        
-        # elif len(self.result) > 1:
-        #     self._info.append({'type': 'pk', 'info': self.result})
-        # print(self._gamestatus.gameindex())
 
 
 class EventPool(Event):
@@ -585,7 +576,6 @@ class EventPool(Event):
             self._info = None
         elif len(self.result) > 1:
             self._info.append({'type': 'pk', 'info': self.result})
-        # print(self._gamestatus.gameindex())
 
 
 class EventPoolPk(Event):
@@ -619,18 +609,6 @@ class EventPoolPk(Event):
             self._info.append({'type': 'pkgood', 'info': self.result[0]})
         elif len(self.result) > 1:
             self._info.append({'type': 'pkfail', 'info': None})
-        # print(self._gamestatus.gameindex())
-
-
-# class EventPoolRandom(Event):
-#     def end(self):
-#         super().end()
-#         if len(self.result) > 0:
-#             self.result = random.choices(self.result)
-#         self._log.append(LogMessage(self._relatedusers, [0],
-#                                     info={'Pool': self._pool,
-#                                           'result': self.result},
-#                                     auth=[-1]))
 
 
 class EventNvwu(Event):
@@ -679,39 +657,6 @@ class EventYuyanjia(Event):
             print(str(self.result[0])+': '+result)
 
 
-class EventTest(Event):
-    def __init__(self):
-        super().__init__(name='EventTest')
-
-    def start(self):
-        self._log.append(LogMessage(sender=0,
-                                    receiver=0,
-                                    info={'round': self._info['round'],
-                                          'text': 'haha wo men kai shi le'},
-                                    auth=0))
-
-    def update(self, message):
-        self.content = message
-        self.end()
-
-    def end(self):
-        super().end()
-        print(self.content)
-        print(self.name)
-
-
-class EventNightstarts(Event):
-    def __init__(self):
-        super().__init__(name='EventNightstarts')
-
-    def start(self):
-        self._log.append(LogMessage(sender=0,
-                                    receiver=0,
-                                    info={'round': self._info['round'],
-                                          'text': 'di ' + self._info['round'] + ' ye'},
-                                    auth=0))
-
-
 # %%
 class flowchart:
 
@@ -720,8 +665,6 @@ class flowchart:
                   'nvwu': EventNvwu,
                   'pool': EventPool,
                   'poolpk': EventPoolPk,
-                  'test': EventTest,
-                  'nightstarts': EventNightstarts,
                   'lang': EventLang}
 
     def __init__(self):
