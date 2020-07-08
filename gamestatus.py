@@ -796,7 +796,7 @@ CMDENDGAME = LRSMessage(sender=0, receiver=0, target=0,
 
 # %%
 f = flowchart()
-f.initialize(users=['1', '2', '3', '4'], mode='default', beginningevents=['pool'])
+f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode='MODE_YNL9', beginningevents=['pool'])
 
 #%%
 f.gamestatus.captain = 4
@@ -805,10 +805,13 @@ f.console(1,1)
 f.console(2,1)
 f.console(3,2)
 f.console(4,2)
+f.console(5,2)
+f.console(6,1)
+f.console(7,6)
+f.console(8,6)
+f.console(9,6)
 # %%
-f.console(1,1)
-f.console(2,3)
-f.console(3,3)
-f.console(4,4)
+f.gamestatus.gameindex()
 
 # %%
+f.gamestatus.factionindex()
