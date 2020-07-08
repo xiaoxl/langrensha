@@ -463,13 +463,12 @@ class Event:
         self._log = list()
         self._gamestatus = None
 
-    def initialize(self, gamestatus=None):
+    def initialize(self, gamestatus=None, info=None):
         self.name = 'basic'
         self._gamestatus = gamestatus
         self._relatedusers = list()
         self._targets = list()
-        # self._info = info.copy()
-
+        self._info = info
         # relatedusers and targets are initialized in childeren classes
 
     def blindrun(self):
@@ -496,26 +495,30 @@ class Event:
         else:
             self._pool['A'].append(sender)
 
+    def countvote(self, captain=True, tiebreak='pk'):
+        pool = {item: 0 for item in self._gamestatus.getalive()}
+        for i in self._pool.keys():
+            if i != 'A':
+                pool[i] = len(self._pool[i])
+                if captain is True:
+                    if self._gamestatus.captain in self._pool[i]:
+                        pool.update({i: pool[i]+0.5})
+        # pool = {i: len(self._pool[i]) for i in self._pool.keys() if i != 'A'}
+        # if captain is True:
+        #     for i in pool.keys():
+        #         if self._gamestatus.captain in self._pool[i]:
+        #             pool.update({i: pool[i]+0.5})
+        maxvalue = max(pool.values())
+        result = [i for i in pool.keys() if pool[i] == maxvalue]
+        if tiebreak == 'random':
+            if len(result) > 1:
+                result = random.choices(result)
+        self.result = result
+        return result
+
     def end(self):
         self.status = 'End'
-        pool = {i: len(self._pool[i]) for i in self._pool.keys() if i != 'A'}
-        for i in pool.keys():
-            if self._gamestatus.captain in self._pool[i]:
-                pool.update({i: pool[i]+1})
-        maxvalue = max(pool.values())
-        self.result = [i for i in pool.keys() if pool[i] == maxvalue]
-        # self.result = list()
-        # flag = False
-        # if len(maxlist) > 1:
-        #     for index in maxlist:
-        #         if self._gamestatus.captain in self._pool[index]:
-        #             flag = True
-        #             self.result = [index]
-        #     if flag is False:
-        #         for index in maxlist:
-        #             self.result.append(list(self._pool.keys())[index])
-        # if 'A' in self.result:
-        #     self.result.remove('A')
+        self.countvote(captain=True, tiebreak='pk')
 
     def getpool(self):
         return self._pool
@@ -524,17 +527,43 @@ class Event:
         return self._log
 
 
-class EventNight(Event):
-    def __init__(self, info):
-        super().__init__()
-        self.name = 'EventNight'
+class EventLang(Event):
+    def initialize(self, gamestatus, info):
+        super().initialize(gamestatus)
+        self.name = 'lang'
+        self._info = info
+        alllang = gamestatus.factionindex(count=False)['lang'][:]
+        self._relatedusers = [i for i in alllang if gamestatus.pick(i).status == 'alive']
+        self._targets = gamestatus.getalive()[:]
+
+    def start(self):
+        print(self.name)
+        print('alive: ')
+        print(self._targets)
+        print('\n')
+
+    def end(self):
+        self.status = 'End'
+        if set(self._pool.keys()) - set('A') != set():
+            self.countvote(captain=False, tiebreak='random')
+            self._log.append(LogMessage([0], [0],
+                                        info={'Pool': self._pool,
+                                              'result': self.result},
+                                        auth=[-1]))
+            self._gamestatus.pick(self.result[0]).setstatus('murdered')
+            self._info.append({'type': 'langdao', 'target': self.result[0],
+                               'round': self._gamestatus.round})
+        
+        # elif len(self.result) > 1:
+        #     self._info.append({'type': 'pk', 'info': self.result})
+        # print(self._gamestatus.gameindex())
 
 
 class EventPool(Event):
-    def initialize(self, gamestatus, info={'tiebreak': 'pk'}):
+    def initialize(self, gamestatus, info):
         super().initialize(gamestatus)
         self.name = 'toupiao'
-        self._info = info.copy()
+        self._info = info
         self._relatedusers = gamestatus.getalive()[:]
         self._targets = gamestatus.getalive()[:]
 
@@ -545,34 +574,63 @@ class EventPool(Event):
         print('\n')
 
     def end(self):
-        super().end()
-        if self._info['tiebreak'] == 'random':
-            if len(self.result) > 0:
-                self.result = [random.choices(self.result)]
-                self._log.append(LogMessage(self._relatedusers, [0],
-                                            info={'Pool': self._pool,
-                                                  'result': self.result},
-                                            auth=[-1]))
-            self._gamestatus.pick(self.result[0]).setstatus('banished')
-        elif self._info['tiebreak'] == 'pk':
-            self._log.append(LogMessage([0], [0],
-                                        info={'Pool': self._pool,
-                                              'result': self.result},
-                                        auth=[-1]))
-            if len(self.result) == 1:
-                self._gamestatus.pick(self.result[0]).setstatus('banished')
-        # print(self._gamestatus.gameindex())
-
-
-class EventPoolRandom(Event):
-    def end(self):
-        super().end()
-        if len(self.result) > 0:
-            self.result = random.choices(self.result)
-        self._log.append(LogMessage(self._relatedusers, [0],
+        self.status = 'End'
+        self.countvote(captain=True, tiebreak='pk')
+        self._log.append(LogMessage([0], [0],
                                     info={'Pool': self._pool,
                                           'result': self.result},
                                     auth=[-1]))
+        if len(self.result) == 1:
+            self._gamestatus.pick(self.result[0]).setstatus('banished')
+            self._info = None
+        elif len(self.result) > 1:
+            self._info.append({'type': 'pk', 'info': self.result})
+        # print(self._gamestatus.gameindex())
+
+
+class EventPoolPk(Event):
+    def initialize(self, gamestatus, info):
+        super().initialize(gamestatus)
+        self.name = 'pktoupiao'
+        self._info = info
+        self._targets = info[-1]['info'][:]
+        self._relatedusers = list(set(gamestatus.getalive())-set(self._targets))
+        if self._relatedusers == list():
+            self._pool = dict()
+            self.end()
+
+    def start(self):
+        print(self.name)
+        print('pk: ')
+        print(self._targets)
+        print('dd')
+        print(self._relatedusers)
+        print('\n')
+
+    def end(self):
+        self.status = 'End'
+        self.countvote(captain=True, tiebreak='pk')
+        self._log.append(LogMessage([0], [0],
+                                    info={'Pool': self._pool,
+                                          'result': self.result},
+                                    auth=[-1]))
+        if len(self.result) == 1:
+            self._gamestatus.pick(self.result[0]).setstatus('banished')
+            self._info.append({'type': 'pkgood', 'info': self.result[0]})
+        elif len(self.result) > 1:
+            self._info.append({'type': 'pkfail', 'info': None})
+        # print(self._gamestatus.gameindex())
+
+
+# class EventPoolRandom(Event):
+#     def end(self):
+#         super().end()
+#         if len(self.result) > 0:
+#             self.result = random.choices(self.result)
+#         self._log.append(LogMessage(self._relatedusers, [0],
+#                                     info={'Pool': self._pool,
+#                                           'result': self.result},
+#                                     auth=[-1]))
 
 
 class EventNvwu(Event):
@@ -594,19 +652,31 @@ class EventYuyanjia(Event):
     '''
     _info = {'yuyanjia': user, 'users': users}
     '''
+    def initialize(self, gamestatus, info):
+        super().initialize(gamestatus)
+        self.name = 'yuyanjiayanren'
+        self._info = None
+        self._relatedusers = [gamestatus.gameindex(basedon='role')['yuyanjia'][0]['playernum']]
+        self._targets = gamestatus.getalive()[:]
+
+    def start(self):
+        print('alive yanren')
+        print(self._gamestatus.getalive())
+
     def end(self):
         super().end()
-        userindex = self._info['userindex']
-        roleindex = self._info['roleindex']
-        users = self._info['users']
-        ynum = roleindex['yuyanjia'][0].playernum
+        # userindex = self._info['userindex']
+        # roleindex = self._info['roleindex']
+        # users = self._info['users']
+        ynum = self._gamestatus.gameindex(basedon='role')['yuyanjia'][0]['playernum']
         if len(self.result) > 0:
-            result = userindex[users.pick(self.result[0])]
+            result = self._gamestatus.pick(self.result[0]).role
             msg = LogMessage(sender=[ynum], receiver=[0],
                              info={'type': 'yuyanjiayanren',
                                    'target': self.result[0],
                                    'result': result}, auth=[ynum])
             self._log.append(msg)
+            print(str(self.result[0])+': '+result)
 
 
 class EventTest(Event):
@@ -649,15 +719,16 @@ class flowchart:
                   'yuyanjia': EventYuyanjia,
                   'nvwu': EventNvwu,
                   'pool': EventPool,
+                  'poolpk': EventPoolPk,
                   'test': EventTest,
-                  'nightstarts': EventNightstarts}
+                  'nightstarts': EventNightstarts,
+                  'lang': EventLang}
 
     def __init__(self):
         self._status = 'Not Running'
         self.log = list()
         self.cevent = None
-        # self.currentstatus = dict()
-        self.importantinfo = dict()
+        self.cache = list()
         self.gamestatus = GameStatus()
 
     def initialize(self, users=list(), mode='default',
@@ -681,11 +752,11 @@ class flowchart:
 
     def startevent(self, eventname, info=None):
         '''
-        info = {status, previous result}
+        info = {previous result}
         '''
         # start a new event
         if info is None:
-            info = {'preresult': list(), 'tiebreak': 'pk'}
+            info = self.cache
         if eventname in self.EVENT_DICT.keys():
             self.cevent = self.EVENT_DICT[eventname]()
             self.cevent.initialize(gamestatus=self.gamestatus, info=info)
@@ -724,9 +795,12 @@ class flowchart:
         if self.checkendcondition()['end']:
             self.end()
         else:
+            if len(self.cache) > 0:
+                if 'pk' == self.cache[-1]['type']:
+                    self.insertevent('poolpk')
             # if the game doesn't end, start the next event.
             if self.events == list():
-                      self.events.append('pool')
+                self.events.append('pool')
             self.startevent(self.events.pop(0))
 
     def checkendcondition(self):
@@ -796,22 +870,25 @@ CMDENDGAME = LRSMessage(sender=0, receiver=0, target=0,
 
 # %%
 f = flowchart()
-f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode='MODE_YNL9', beginningevents=['pool'])
+f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode='MODE_YNL9', beginningevents=['lang'])
 
 #%%
 f.gamestatus.captain = 4
 
-f.console(1,1)
-f.console(2,1)
-f.console(3,2)
-f.console(4,2)
-f.console(5,2)
-f.console(6,1)
-f.console(7,6)
-f.console(8,6)
-f.console(9,6)
+f.console(1,0)
+f.console(2,0)
+f.console(3,0)
+f.console(4,4)
+f.console(5,0)
+f.console(6,6)
+f.console(7,0)
+f.console(8,0)
+f.console(9,0)
 # %%
 f.gamestatus.gameindex()
 
 # %%
 f.gamestatus.factionindex()
+
+# %%
+f.console(2,3)
