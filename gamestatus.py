@@ -236,7 +236,10 @@ class Users:
         return self.numindex(playernum)
 
     def getalive(self):
-        return [i.playernum for i in self.statusindex()['alive']]
+        nlist = [i.playernum for i in self.statusindex()['alive']]
+        if 'baichi' in self.statusindex().keys():
+            nlist.extend([i.playernum for i in self.statusindex()['baichi']])
+        return nlist
 
     def dumps(self):
         return [item.dumps() for item in self.users]
@@ -257,6 +260,7 @@ class Roles:
         self.faction = faction
         self.timing = timing
         self.info = dict()
+        self.printname = ''
 
     def night(self, **kwargs):
         pass
@@ -288,6 +292,7 @@ class Roles_Nvwu(Roles):
     def __init__(self):
         super().__init__('nvwu', 'shen', 30)
         self.info = {'jie': 1, 'du': 1}
+        self.printname = '女巫'
 
     def applyjie(self):
         flag = 'fail'
@@ -307,11 +312,13 @@ class Roles_Nvwu(Roles):
 class Roles_Yuyanjia(Roles):
     def __init__(self):
         super().__init__('yuyanjia', 'shen', 40)
+        self.printname = '预言家'
 
 
 class Roles_Lieren(Roles):
     def __init__(self):
         super().__init__('lieren', 'shen', -10)
+        self.printname = '猎人'
 
     def passive(self):
         print('haha')
@@ -320,6 +327,7 @@ class Roles_Lieren(Roles):
 class Roles_Baichi(Roles):
     def __init__(self):
         super().__init__('baichi', 'shen', -10)
+        self.printname = '白痴'
 
     def passive(self):
         print('haha')
@@ -328,6 +336,7 @@ class Roles_Baichi(Roles):
 class Roles_Lang(Roles):
     def __init__(self):
         super().__init__('lang', 'lang', 20)
+        self.printname = '狼'
 
     def night(self):
         print('haha')
@@ -336,11 +345,13 @@ class Roles_Lang(Roles):
 class Roles_Shouwei(Roles):
     def __init__(self):
         super().__init__('shouwei', 'shen', 10)
+        self.printname = '守卫'
 
 
 class Roles_Heilangwang(Roles):
     def __init__(self):
         super().__init__('heilangwang', 'lang', -10)
+        self.printname = '黑狼王'
 
     def passive(self):
         print('hoho')
@@ -349,6 +360,7 @@ class Roles_Heilangwang(Roles):
 class Roles_Bailangwang(Roles):
     def __init__(self):
         super().__init__('bailangwang', 'lang', -20)
+        self.printname = '白狼王'
 
     def day(self):
         print('xxxx')
@@ -357,6 +369,7 @@ class Roles_Bailangwang(Roles):
 class Roles_Cunmin(Roles):
     def __init__(self):
         super().__init__('cunmin', 'min', 0)
+        self.printname = '村民'
 
 
 class Modes:
