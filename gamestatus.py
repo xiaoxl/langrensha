@@ -1,26 +1,59 @@
+# -*-coding: utf-8 -*-
 # %%
 import json
 import random
 import math
 
 
-# def maxoflist(alist):
-#     m = max(alist)
-#     return [i for i, j in enumerate(alist) if j == m]
+DEBUGMODE = True
+
+
+class GameTime:
+    def __init__(self):
+        self.night = 1
+        self.day = 0
+        self.current = 'Night'
+
+    def next(self):
+        if self.night > self.day:
+            self.day = self.day + 1
+            self.current = 'Day'
+        else:
+            self.night = self.night + 1
+            self.current = 'Night'
+
+    def dumps(self):
+        return self.current + ' ' + str(max(self.night, self.day))
+
+    def loads(self, text):
+        textlist = text.split(' ')
+        self.current = textlist[0]
+        num = int(textlist[1])
+        if self.current == 'Night':
+            self.night = num
+            self.day = num - 1
+        elif self.current == 'Day':
+            self.night = num
+            self.day = num
+        else:
+            pass
 
 
 class LogMessage:
-    def __init__(self, sender=list(), receiver=list(), info=dict(), auth=None):
+    def __init__(self, sender=list(), receiver=list(), info=dict(),
+                 auth=None, logable=True):
         self.sender = sender
         self.receiver = receiver
         self.info = info
         self.auth = auth
+        self.logable = logable
 
     def todict(self):
         return {'sender': self.sender,
                 'receiver': self.receiver,
                 'info': self.info,
-                'auth': self.auth}
+                'auth': self.auth,
+                'logable': self.logable}
 
 
 # %%
@@ -353,6 +386,16 @@ class Modes:
         rlist.extend(['cunmin' for j in range(numofcunmin)])
         return rlist
 
+    def LNC_generate(self, numofplayers):
+        rlist = list()
+        if numofplayers <= 1:
+            rlist = self.LC_generate(numofplayers)
+        else:
+            numofcunmin = numofplayers - 2
+            rlist = ['cunmin' for j in range(numofcunmin)]
+            rlist.extend(['lang', 'nvwu'])
+        return rlist
+
     def get(self, numberofplayers, mode='default'):
         '''
         mode = a list of names
@@ -361,6 +404,8 @@ class Modes:
             rlist = self.MODE_YNLB
         elif mode == 'MODE_YNL9':
             rlist = self.MODE_YNL9
+        elif mode == 'MODE_TESTLN':
+            rlist = self.LNC_generate(numberofplayers)
         elif isinstance(mode, list):
             rlist = mode
         else:
@@ -388,7 +433,7 @@ class GameStatus:
             self.AllUsers = Users()
         self.Mode = sorted(Modes().get(self.NumberOfPlayers, mode=mode))
         self.captain = 0
-        self.round = 1
+        self.round = GameTime()
 
     def initialize(self, changenum=False):
         self.changeroles()
@@ -419,12 +464,12 @@ class GameStatus:
         self.Mode = sorted([item['role'] for item in gamestatus])
         self.AllUsers.loads(gamestatus)
         self.captain = info['captain']
-        self.round = info['round']
+        self.round.loads(info['round'])
 
     def dumps(self):
         info = {'gamestatus': self.AllUsers.dumps(),
                 'captain': self.captain,
-                'round': self.round}
+                'round': self.round.dumps()}
         return info
 
     def pick(self, i):
@@ -462,6 +507,7 @@ class Event:
         self._info = dict()
         self._log = list()
         self._gamestatus = None
+        self._debugmode = DEBUGMODE
 
     def initialize(self, gamestatus=None, info=None):
         self.name = 'basic'
@@ -474,6 +520,9 @@ class Event:
     def blindrun(self):
         # if all relatedusers are dead, do something
         pass
+
+    def start(self):
+        self.end()
 
     def update(self, message):
         '''
@@ -518,8 +567,37 @@ class Event:
     def getpool(self):
         return self._pool
 
-    def getlog(self):
-        return self._log
+    def getlog(self, outputtype='str', clear=True):
+        output = list()
+        if outputtype == 'str':
+            for item in self._log:
+                output.append(LogMessage(info=self.render(item.info),
+                                         auth=item.auth, logable=item.logable))
+        if clear is True:
+            self._log = list()
+        return output
+
+    def generatelog(self, info, auth=None, logable=True):
+        if self._debugmode is True:
+            print(self.render(info))
+        self._log.append(LogMessage(sender=[0], receiver=[0], info=info,
+                                    auth=auth, logable=logable))
+
+    def render(self, textinfo=list(), outputtype='str'):
+        text = ''
+        if outputtype == 'str':
+            for item in textinfo:
+                if isinstance(item, str):
+                    text = text + item
+                elif isinstance(item, list):
+                    text = text + ', '.join([str(j) for j in item])
+                elif isinstance(item, dict):
+                    # pool = {'A': [], 1: []}
+                    for j in item.keys():
+                        text = text + str(j) + ': ' + ', '.join([str(c) for c in item[j]]) + '\n'
+                else:
+                    text = text + str(item)
+        return text
 
 
 class EventLang(Event):
@@ -527,27 +605,26 @@ class EventLang(Event):
         super().initialize(gamestatus)
         self.name = 'lang'
         self._info = info
-        alllang = gamestatus.factionindex(count=False)['lang'][:]
-        self._relatedusers = [i for i in alllang if gamestatus.pick(i).status == 'alive']
+        self._cahce = info
+        self._alllang = gamestatus.factionindex(count=False)['lang'][:]
+        self._relatedusers = [i for i in self._alllang if gamestatus.pick(i).status == 'alive']
+        self._alllangalive = self._relatedusers[:]
         self._targets = gamestatus.getalive()[:]
 
     def start(self):
-        print(self.name)
-        print('alive: ')
-        print(self._targets)
-        print('\n')
+        self.generatelog(info=['狼人请刀人。目标范围: ',
+                               self._targets],
+                         auth=self._relatedusers[:],
+                         logable=False)
 
     def end(self):
         self.status = 'End'
         if set(self._pool.keys()) - set('A') != set():
             self.countvote(captain=False, tiebreak='random')
-            self._log.append(LogMessage([0], [0],
-                                        info={'Pool': self._pool,
-                                              'result': self.result},
-                                        auth=[-1]))
-            self._gamestatus.pick(self.result[0]).setstatus('murdered')
-            self._info.append({'type': 'langdao', 'target': self.result[0],
-                               'round': self._gamestatus.round})
+            self.generatelog(info=['狼人已刀人: ',
+                                   self.result[0]],
+                             auth=self._alllang[:])
+            self._info[self._gamestatus.round.dumps()].update({'langdao': self.result[0]})
 
 
 class EventPool(Event):
@@ -555,27 +632,33 @@ class EventPool(Event):
         super().initialize(gamestatus)
         self.name = 'toupiao'
         self._info = info
+        self._cahce = info
         self._relatedusers = gamestatus.getalive()[:]
         self._targets = gamestatus.getalive()[:]
 
     def start(self):
-        print(self.name)
-        print('alive: ')
-        print(self._relatedusers)
-        print('\n')
+        self.generatelog(info=['现在开始投票。活人: ',
+                               self._relatedusers[:]],
+                         auth=[-1], logable=False)
 
     def end(self):
         self.status = 'End'
         self.countvote(captain=True, tiebreak='pk')
-        self._log.append(LogMessage([0], [0],
-                                    info={'Pool': self._pool,
-                                          'result': self.result},
-                                    auth=[-1]))
         if len(self.result) == 1:
+            self.generatelog(info=['投票结束。被放逐的玩家是: ',
+                                   self.result,
+                                   '\n票型: \n',
+                                   self._pool],
+                             auth=[-1], logable=True)
             self._gamestatus.pick(self.result[0]).setstatus('banished')
             self._info = None
         elif len(self.result) > 1:
-            self._info.append({'type': 'pk', 'info': self.result})
+            self.generatelog(info=['投票结束。平票。上pk台的玩家是: ',
+                                   self.result,
+                                   '\n票型: \n',
+                                   self._pool],
+                             auth=[-1], logable=True)
+            self._info[self._gamestatus.round.dumps()].update({'pk': self.result})
 
 
 class EventPoolPk(Event):
@@ -583,47 +666,133 @@ class EventPoolPk(Event):
         super().initialize(gamestatus)
         self.name = 'pktoupiao'
         self._info = info
-        self._targets = info[-1]['info'][:]
+        self._cahce = info
+        self._targets = info[self._gamestatus.round.dumps()]['pk']
         self._relatedusers = list(set(gamestatus.getalive())-set(self._targets))
         if self._relatedusers == list():
             self._pool = dict()
             self.end()
 
     def start(self):
-        print(self.name)
-        print('pk: ')
-        print(self._targets)
-        print('dd')
-        print(self._relatedusers)
-        print('\n')
+        self.generatelog(info=['pk投票。pk的玩家是: ',
+                               self._targets,
+                               '\n可以投票的玩家有: ',
+                               self._relatedusers], auth=[-1], logable=True)
 
     def end(self):
         self.status = 'End'
         self.countvote(captain=True, tiebreak='pk')
-        self._log.append(LogMessage([0], [0],
-                                    info={'Pool': self._pool,
-                                          'result': self.result},
-                                    auth=[-1]))
         if len(self.result) == 1:
+            self.generatelog(info=['投票结束。被放逐的玩家是: ',
+                                   self.result,
+                                   '\n票型: ',
+                                   self._pool], auth=[-1], logable=True)
             self._gamestatus.pick(self.result[0]).setstatus('banished')
-            self._info.append({'type': 'pkgood', 'info': self.result[0]})
+            self._info[self._gamestatus.round.dumps()].update({'work': self.result[0]})
         elif len(self.result) > 1:
-            self._info.append({'type': 'pkfail', 'info': None})
+            self.generatelog(info=['继续平票。无人被流放。'], auth=[-1], logable=True)
+            self._info[self._gamestatus.round.dumps()].update({'fail': None})
 
 
 class EventNvwu(Event):
-    '''
-    _info = {'nvwu': user, 'daokou': playernum}
-    '''
+    def initialize(self, gamestatus, info):
+        super().initialize(gamestatus)
+        self.name = 'nvwu'
+        self._info = info
+        self._cahce = info
+        self._relatedusers = [gamestatus.gameindex(basedon='role')['nvwu'][0]['playernum']]
+        self._nvwunum = self._relatedusers[0]
+        self._targets = gamestatus.getalive()[:]
+        self._nvwujineng = self._gamestatus.pick(self._nvwunum).roleClass.info.copy()
+
     def start(self):
-        if 'nvwu' in self._info.keys():
-            self._info['nvwu'].notifymessage(self._info['daokou'],
-                                             texttype='nvwuyandaokou')
+        info = self._info[self._gamestatus.round.dumps()]
+        if self._gamestatus.pick(self._nvwunum).roleClass.info == {'jie': 0, 'du': 0}:
+            self.generatelog(info=['女巫无技能'], auth=self._relatedusers[:], logable=False)
+            self.end()
+        else:
+            self.generatelog(info=['女巫操作: '],
+                             auth=self._relatedusers[:], logable=False)
+            if self._nvwujineng['jie'] == 1:
+                if 'langdao' in info.keys():
+                    self.generatelog(info=['狼刀: ',
+                                           info['langdao'],
+                                           '。如果想救人请输入-1'],
+                                     auth=self._relatedusers[:],
+                                     logable=False)
+                else:
+                    self.generatelog(info=['狼空刀。'],
+                                     auth=self._relatedusers[:],
+                                     logable=False)
+            if self._nvwujineng['du'] == 1:
+                self.generatelog(info=['你有一瓶毒药。活人: ',
+                                       self._gamestatus.getalive(),
+                                       '。如果想毒人请直接输入玩家号码。'],
+                                 auth=self._relatedusers[:],
+                                 logable=False)
+
+    def update(self, message):
+        '''
+        message = {sender, receiver, target, texttype, auth}
+        '''
+        sender = message.sender
+        if sender in self._relatedusers:
+            self._relatedusers.remove(sender)
+            target = message.target
+            if target == -1 and self._nvwujineng['jie'] == 1:
+                # save
+                try2save = self._gamestatus.pick(self._nvwunum).roleClass.applyjie()
+                if try2save == 'succeed':
+                    self.generatelog(info=['女巫出手救人。'],
+                                     auth=[self._nvwunum],
+                                     logable=True)
+                    self._info[self._gamestatus.round.dumps()].update({'nvwujiu': None})
+            elif target in self._targets and self._nvwujineng['du'] == 1:
+                # du
+                try2poison = self._gamestatus.pick(self._nvwunum).roleClass.applydu()
+                if try2poison == 'succeed':
+                    self.generatelog(info=['女巫出手毒人: ',
+                                           target],
+                                     auth=[self._nvwunum],
+                                     logable=True)
+                    self._info[self._gamestatus.round.dumps()].update({'nvwudu': target})
+            else:
+                # nothing
+                self.generatelog(info=['女巫什么都没做'], auth=[self._nvwunum], logable=True)
+        if len(self._relatedusers) == 0:
+            self.end()
 
     def end(self):
-        super().end()
-        if len(self.result) > 0:
-            self.result = random.choices(self.result)
+        self.status = 'End'
+
+
+class EventNightends(Event):
+    def initialize(self, gamestatus, info):
+        super().initialize(gamestatus)
+        self.name = 'nightends'
+        self._info = info[self._gamestatus.round.dumps()]
+        self._cache = info
+        # self.end()
+
+    def end(self):
+        self.status = 'End'
+        dead = list()
+        if 'langdao' in self._info.keys():
+            if 'nvwujiu' not in self._info.keys():
+                dead.append(self._info['langdao'])
+        if 'nvwudu' in self._info.keys():
+            if self._info['nvwudu'] not in dead:
+                dead.append(self._info['nvwudu'])
+        if len(dead) == 0:
+            self.generatelog(info=['昨晚是平安夜。'],
+                             auth=[-1], logable=True)
+        else:
+            self.generatelog(info=['昨晚死了', len(dead), '个人: ', dead],
+                             auth=[-1], logable=True)
+        for p in dead:
+            self._gamestatus.pick(p).setstatus('dead')
+        self._gamestatus.round.next()
+        self._cache.update({self._gamestatus.round.dumps(): dict()})
 
 
 class EventYuyanjia(Event):
@@ -643,9 +812,6 @@ class EventYuyanjia(Event):
 
     def end(self):
         super().end()
-        # userindex = self._info['userindex']
-        # roleindex = self._info['roleindex']
-        # users = self._info['users']
         ynum = self._gamestatus.gameindex(basedon='role')['yuyanjia'][0]['playernum']
         if len(self.result) > 0:
             result = self._gamestatus.pick(self.result[0]).role
@@ -665,20 +831,21 @@ class flowchart:
                   'nvwu': EventNvwu,
                   'pool': EventPool,
                   'poolpk': EventPoolPk,
-                  'lang': EventLang}
+                  'lang': EventLang,
+                  'nightends': EventNightends}
 
     def __init__(self):
         self._status = 'Not Running'
         self.log = list()
         self.cevent = None
-        self.cache = list()
         self.gamestatus = GameStatus()
+        self.cache = {self.gamestatus.round.dumps(): dict()}
 
     def initialize(self, users=list(), mode='default',
                    beginningevents=list(), settings={'changenum': False}):
         self.gamestatus = GameStatus(users=users, mode=mode)
         self.gamestatus.initialize(changenum=settings['changenum'])
-        self.events = beginningevents[:]
+        self.events = beginningevents
         # self.currentstatus = self.gamestatus.gameindex()
         self._status = 'Running'
         self.nextevent()
@@ -691,6 +858,12 @@ class flowchart:
 
     def nextevent(self):
         # flowchart is controlled here
+        # if len(self.cache) > 0:
+        #     if 'pk' in self.cache[self.gamestatus.round.dumps()].keys():
+        #         self.insertevent('poolpk')
+        #     # if the game doesn't end, start the next event.
+        if self.events == list():
+            self.events.append('pool')
         self.startevent(self.events.pop(0))
 
     def startevent(self, eventname, info=None):
@@ -704,47 +877,24 @@ class flowchart:
             self.cevent = self.EVENT_DICT[eventname]()
             self.cevent.initialize(gamestatus=self.gamestatus, info=info)
             self.cevent.start()
+            self.log.extend(self.cevent.getlog(clear=True))
+            if self.cevent.status == 'End':
+                self.endevent()
 
     def update(self, message):
         # update only if the game is on.
         if self._status == 'Running':
-            if message.texttype == 'cmd-endgame':
-                self.end()
-            else:
-                # when get a new message, call the update function from event
-                self.cevent.update(message)
-                # if the event ends by the update, it will call event.end()
-                # automatically, and make event.status = 'End'.
-                if self.cevent.status == 'End':
-                    self.endevent()
-                # if the event ends, call the endevent function in the flowchart.
-        else:
-            if message.texttype == 'cmd-newgame':
-                # in this case message.info contains:
-                # info = {[usernames], mode, [beginningevents], 'setings'={}}
-                self._status = 'Running'
-                self.initialize(users=message.info['usernames'],
-                                mode=message.info['mode'],
-                                beginningevents=message.info['beginningevents'],
-                                settings=message.info['settings'])
-                self.nextevent()
+            self.cevent.update(message)
+            if self.cevent.status == 'End':
+                self.endevent()
 
     def endevent(self):
         # first log all results and modify the status.
         self.log.extend(self.cevent.getlog())
-        print(self.cevent.getpool())
-        self.modifygamestatus()
-        # check whether the game ends.
         if self.checkendcondition()['end']:
             self.end()
         else:
-            if len(self.cache) > 0:
-                if 'pk' == self.cache[-1]['type']:
-                    self.insertevent('poolpk')
-            # if the game doesn't end, start the next event.
-            if self.events == list():
-                self.events.append('pool')
-            self.startevent(self.events.pop(0))
+            self.nextevent()
 
     def checkendcondition(self):
         faction = self.gamestatus.factionindex()
@@ -758,9 +908,6 @@ class flowchart:
             result = {'end': False, 'winner': None}
         return result
 
-    def modifygamestatus(self):
-        pass
-
     def end(self):
         self._status = 'Not Running'
         print('the end!')
@@ -772,10 +919,10 @@ class flowchart:
                 clog.append(item.info)
         return clog
 
-    def printlog(self):
+    def printlog(self, alllog=True):
         for item in self.log:
-            print(item.todict())
-            print('\n')
+            if alllog is True or item.logable is True:
+                print(item.todict())
 
     def console(self, sender, target):
         self.update(LRSMessage(sender=sender, receiver=0,
@@ -802,36 +949,45 @@ u = ['a1', 'b2', 'c3', 'd4']
 # newgame.initialize()
 # newgame.gameindex()
 
-CMDNEWGAME = LRSMessage(sender=0, receiver=0, target=0, texttype='cmd-newgame',
-                        info={'usernames': u,
-                              'mode': 'MODE_YNLB',
-                              'beginningevents': ['pool', 'pool', 'pool'],
-                              'settings': {'changenum': False}})
 
-CMDENDGAME = LRSMessage(sender=0, receiver=0, target=0,
-                        texttype='cmd-endgame', info=dict())
 
 # %%
 f = flowchart()
-f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode='MODE_YNL9', beginningevents=['lang'])
+f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode='MODE_TESTLN', beginningevents=['lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends'])
+
+f.gamestatus.gameindex()
 
 #%%
 f.gamestatus.captain = 4
 
-f.console(1,0)
-f.console(2,0)
-f.console(3,0)
-f.console(4,4)
-f.console(5,0)
-f.console(6,6)
-f.console(7,0)
-f.console(8,0)
-f.console(9,0)
 # %%
-f.gamestatus.gameindex()
-
-# %%
-f.gamestatus.factionindex()
+f.console(1,2)
 
 # %%
 f.console(2,3)
+
+# %%
+f.console(3,3)
+
+# %%
+f.console(4,2)
+# %%
+f.console(5,-1)
+# %%
+f.console(6,3)
+# %%
+f.console(7,1)
+# %%
+f.console(8,-1)
+# %%
+f.console(9,-1)
+
+# %%
+# f.gamestatus.factionindex()
+
+# %%
+# print(f.cevent.name)
+# f.cevent._pool
+
+# %%
+f.console(6, 2)
