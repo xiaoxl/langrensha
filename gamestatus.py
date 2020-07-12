@@ -908,7 +908,7 @@ class EventNvwu(Event):
         self._nvwunum = self._relatedusers[0]
         self._targets = gamestatus.getalive()[:]
         self._nvwujineng = self._gamestatus.pick(self._nvwunum).roleClass.info.copy()
-        self._shouyezijiu = NVWUSHOUYEZIJIU
+        self._shouyezijiu = self._cache['settings']['nvwushouyezijiu']
 
     def start(self):
         info = self._info[self._gamestatus.round.dumps()]
@@ -1067,14 +1067,15 @@ class flowchart:
         self._debugmode = DEBUGMODE
         self.gamestatus = GameStatus()
         self.round = GameTime()
-        self.cache = {self.round.dumps(): dict()}
+        self.cache = {self.round.dumps(): dict(), 'settings': dict()}
 
     def initialize(self, users=list(), mode='default',
-                   beginningevents=list(), settings={'changenum': False}):
+                   beginningevents=list(), settings={'changenum': False,
+                                                     'nvwushouyezijiu': NVWUSHOUYEZIJIU}):
         self.gamestatus = GameStatus(users=users, mode=mode)
         self.gamestatus.initialize(changenum=settings['changenum'])
         self.events = beginningevents
-        # self.currentstatus = self.gamestatus.gameindex()
+        self.cache['settings'] = settings
         self._status = 'Running'
         self.nextevent()
 
