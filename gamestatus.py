@@ -6,7 +6,7 @@ import math
 
 
 DEBUGMODE = True
-NVWUSHOUYEZIJIU = False
+NVWUSHOUYEZIJIU = True
 LOGOUTPUTMODE = 'str'
 
 
@@ -431,7 +431,7 @@ class Modes:
         return rlist
 
     def generate(self, numofplayers, partlist=['lang', 'nvwu',
-                                                    'yuyanjia', 'lieren']):
+                                               'yuyanjia', 'lieren']):
         rlist = partlist
         if numofplayers <= len(rlist):
             rlist = self.LC_generate(numofplayers)
@@ -626,6 +626,19 @@ class Event:
     def generatelog(self, info, auth=[-1], logable=False):
         self._log.append(LogMessage(info=info, auth=auth, logable=logable).log())
 
+    def deadpassive(self, dead=dict()):
+        # dead = {p: 'how ta dies'}
+        fevents = list()
+        for p in list(dead.keys()):
+            thisone = self._gamestatus.pick(p)
+            if thisone.roleClass.timing == -10:
+                if thisone.role == 'lieren' and dead[p] == 'nvwudu':
+                    pass
+                else:
+                    fevents.append(thisone.roleClass.passive())
+            thisone.setstatus('dead')
+        return fevents
+
 
 class EventDaystart(Event):
     def initialize(self, gamestatus, info):
@@ -660,13 +673,14 @@ class EventDayends(Event):
         self.status = 'End'
         dead = dict()
         if 'banished' in self._info.keys():
-            dead.update({self._info['banished']: 'banished'})
-        fevents = list()
-        for p in list(dead.keys()):
-            thisone = self._gamestatus.pick(p)
-            if thisone.roleClass.timing == -10:
-                fevents.append(thisone.roleClass.passive())
-            thisone.setstatus('dead')
+            for p in self._info['banished']:
+                dead.update({p: 'banished'})
+        fevents = self.deadpassive(dead)
+        # for p in list(dead.keys()):
+        #     thisone = self._gamestatus.pick(p)
+        #     if thisone.roleClass.timing == -10:
+        #         fevents.append(thisone.roleClass.passive())
+        #     thisone.setstatus('dead')
         fevents.append('nightstarts')
         self._info.update({'followingevents': fevents})
 
@@ -674,38 +688,51 @@ class EventDayends(Event):
 class EventLiaotianLangzibao(Event):
     def initialize(self, gamestatus, info):
         super().initialize(gamestatus)
-        self.name = 'toupiao'
-        self._info = info[self._gamestatus.round.dumps()]
+        self.name = 'lang'
         self._cache = info
-        self._relatedusers = gamestatus.getalive()[:]
+        self._alllang = gamestatus.factionindex(count=False)['lang'][:]
+        self._relatedusers = [i for i in self._alllang if gamestatus.pick(i).status == 'alive']
+        self._alllangalive = self._relatedusers[:]
         self._targets = gamestatus.getalive()[:]
 
     def start(self):
-        self.generatelog(info=['现在开始投票。活人: ',
-                               self._relatedusers[:]],
+        self.generatelog(info=['现在开始聊天。活人: ',
+                               self._gamestatus.getalive()[:],
+                               '\n狼人如果想自爆请输入-1。任何人输入-2继续到投票环节。'],
                          auth=[-1], logable=False)
+
+    def update(self, message):
+        sender = message.sender
+        target = message.target
+        if sender in self._relatedusers and target == -1:
+            self.result = [sender]
+            self.end()
+        elif target == -2:
+            self.result = list()
+            self.end()
 
     def end(self):
         self.status = 'End'
-        self.countvote(captain=True, tiebreak='pk')
+        # self.countvote(captain=True, tiebreak='pk')
         if len(self.result) == 1:
-            self.generatelog(info=['投票结束。被放逐的玩家是: ',
-                                   self.result,
-                                   '\n票型: \n',
-                                   self._pool],
+            self.generatelog(info=['狼自爆。自爆玩家: ',
+                                   self.result],
                              auth=[-1], logable=True)
-            self._gamestatus.pick(self.result[0]).setstatus('banished')
+            self._gamestatus.pick(self.result[0]).setstatus('zibao')
             # self._gamestatus.round.next()
-            self._info.update({'banished': self.result})
-        elif len(self.result) > 1:
-            self.generatelog(info=['投票结束。平票。上pk台的玩家是: ',
-                                   self.result,
-                                   '\n票型: \n',
-                                   self._pool],
-                             auth=[-1], logable=True)
-            fevents = ['poolpk']
-            self._info.update({'pk': self.result, 
-                               'followingevents': fevents})
+            dead = {self.result[0]: 'zibao'}
+            fevents = self.deadpassive(dead)
+            self._cache[self._gamestatus.round.dumps()].update({'zibao': self.result,
+                                                                'followingevents': fevents})
+        # elif len(self.result) > 1:
+        #     self.generatelog(info=['投票结束。平票。上pk台的玩家是: ',
+        #                            self.result,
+        #                            '\n票型: \n',
+        #                            self._pool],
+        #                      auth=[-1], logable=True)
+        #     fevents = ['poolpk']
+        #     self._info.update({'pk': self.result, 
+        #                        'followingevents': fevents})
 
 
 class EventPool(Event):
@@ -741,7 +768,7 @@ class EventPool(Event):
                                    self._pool],
                              auth=[-1], logable=True)
             fevents = ['poolpk']
-            self._info.update({'pk': self.result, 
+            self._info.update({'pk': self.result,
                                'followingevents': fevents})
 
 
@@ -749,7 +776,7 @@ class EventPoolPk(Event):
     def initialize(self, gamestatus, info):
         super().initialize(gamestatus)
         self.name = 'pktoupiao'
-        self._info = info
+        # self._info = info
         self._cache = info
         self._targets = info[self._gamestatus.round.dumps()]['pk']
         self._relatedusers = list(set(gamestatus.getalive())-set(self._targets))
@@ -831,12 +858,15 @@ class EventNightends(Event):
         else:
             self.generatelog(info=['昨晚死了', len(dead), '个人: ', list(dead.keys())],
                              auth=[-1], logable=True)
-        fevents = list()
-        for p in list(dead.keys()):
-            thisone = self._gamestatus.pick(p)
-            if thisone.roleClass.timing == -10:
-                fevents.append(thisone.roleClass.passive())
-            thisone.setstatus('dead')
+        # for p in list(dead.keys()):
+        #     thisone = self._gamestatus.pick(p)
+        #     if thisone.roleClass.timing == -10:
+        #         if thisone.role == 'lieren' and dead[p] == 'nvwudu':
+        #             pass
+        #         else:
+        #             fevents.append(thisone.roleClass.passive())
+        #     thisone.setstatus('dead')
+        fevents = self.deadpassive(dead)
         fevents.append('daystarts')
         self._info.update({'followingevents': fevents})
 
@@ -878,6 +908,7 @@ class EventNvwu(Event):
         self._nvwunum = self._relatedusers[0]
         self._targets = gamestatus.getalive()[:]
         self._nvwujineng = self._gamestatus.pick(self._nvwunum).roleClass.info.copy()
+        self._shouyezijiu = NVWUSHOUYEZIJIU
 
     def start(self):
         info = self._info[self._gamestatus.round.dumps()]
@@ -889,11 +920,20 @@ class EventNvwu(Event):
                              auth=self._relatedusers[:], logable=False)
             if self._nvwujineng['jie'] == 1:
                 if 'langdao' in info.keys():
-                    self.generatelog(info=['狼刀: ',
-                                           info['langdao'],
-                                           '。如果想救人请输入-1'],
-                                     auth=self._relatedusers[:],
-                                     logable=False)
+                    if info['langdao'] == self._nvwunum:
+                        if self._gamestatus.round.night > 1 or self._shouyezijiu is False:
+                            self.generatelog(info=['狼刀: 你自己。不能自救。'],
+                                             auth=self._relatedusers[:],
+                                             logable=False)
+                        else:
+                            self.generatelog(info=['狼刀: 你自己。想自救请输入-1。'],
+                                             auth=self._relatedusers[:], logable=False)
+                    else:
+                        self.generatelog(info=['狼刀: ',
+                                               info['langdao'],
+                                               '。如果想救人请输入-1。'],
+                                         auth=self._relatedusers[:],
+                                         logable=False)
                 else:
                     self.generatelog(info=['狼空刀。'],
                                      auth=self._relatedusers[:],
@@ -913,6 +953,11 @@ class EventNvwu(Event):
         if sender in self._relatedusers:
             self._relatedusers.remove(sender)
             target = message.target
+            info = self._info[self._gamestatus.round.dumps()]
+            if 'langdao' in info.keys():
+                if info['langdao'] == self._nvwunum:
+                    if self._gamestatus.round.night > 1 or self._shouyezijiu is False:
+                        target = 0
             if target == -1 and self._nvwujineng['jie'] == 1:
                 # save
                 try2save = self._gamestatus.pick(self._nvwunum).roleClass.applyjie()
@@ -986,10 +1031,12 @@ class EventLieren(Event):
     def end(self):
         super().end()
         if len(self.result) == 1:
-            self.generatelog(info=['猎人开枪带走了：', self.result],
+            self.generatelog(info=['猎人开枪带走了：', self.result[0]],
                              auth=[-1], logable=True)
-            self._gamestatus.pick(self.result).setstatus('dead')
-            # check passive
+            self._gamestatus.pick(self.result[0]).setstatus('dead')
+            dead = {self.result[0]: 'lierenjineng'}
+            fevent = self.deadpassive(dead)
+            self._cache[self._gamestatus.round.dumps()].update({'followingevents': fevent})
         else:
             # result = self._gamestatus.pick(self.result[0]).roleClass.printname
             self.generatelog(info=['猎人没有开枪。'],
@@ -1153,7 +1200,7 @@ u = ['a1', 'b2', 'c3', 'd4']
 
 # %%
 f = flowchart()
-f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode=['lang', 'nvwu', 'lieren'], beginningevents=['nightstarts'])#,'pool', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends'])
+f.initialize(users=['1', '2', '3', '4', '5', '6', '7', '8', '9'], mode=['lang', 'lang', 'lang', 'nvwu', 'yuyanjia', 'lieren'], beginningevents=['nightstarts'])#,'pool', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends', 'lang', 'nvwu', 'nightends'])
 
 f.gamestatus.gameindex()
 
@@ -1190,4 +1237,8 @@ f.console(9,1)
 # f.cevent._pool
 
 # %%
-f.console(6, 2)
+f.allvote(6)
+
+
+#%%
+f.console(6,9)
